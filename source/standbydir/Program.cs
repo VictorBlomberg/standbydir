@@ -24,23 +24,23 @@ namespace standbydir
                 new Program().Run(args);
                 return 0;
             }
-            catch (Exception e)
+            catch (Exception _e)
             {
                 Console.WriteLine("Exception:");
-                Console.WriteLine($"{e}");
+                Console.WriteLine($"{_e}");
                 return 1;
             }
         }
 
         public virtual void Run(IReadOnlyList<string> args)
         {
-            var rootDirectoryPaths = GetRootDirectoryPaths(args);
-            var dateTimeNow = GetNow(args);
+            var _rootDirectoryPaths = GetRootDirectoryPaths(args);
+            var _dateTimeNow = GetNow(args);
 
-            foreach (var rootDirectoryPath in rootDirectoryPaths)
+            foreach (var _rootDirectoryPath in _rootDirectoryPaths)
             {
-                EnsureEmptyDirectoryOnStandby(args, rootDirectoryPath, dateTimeNow);
-                DeleteObsoleteUnusedDirectories(args, rootDirectoryPath, dateTimeNow);
+                EnsureEmptyDirectoryOnStandby(args, _rootDirectoryPath, _dateTimeNow);
+                DeleteObsoleteUnusedDirectories(args, _rootDirectoryPath, _dateTimeNow);
             }
         }
 
@@ -49,28 +49,28 @@ namespace standbydir
             string rootDirectoryPath,
             DateTimeOffset dateTime)
         {
-            var existingDirectoryPaths = GetExistingDirectoryPathsForDateOrderedByIndex(args, rootDirectoryPath, dateTime);
+            var _existingDirectoryPaths = GetExistingDirectoryPathsForDateOrderedByIndex(args, rootDirectoryPath, dateTime);
 
-            var directoryPath = existingDirectoryPaths.LastOrDefault();
-            if (directoryPath != null)
+            var _directoryPath = _existingDirectoryPaths.LastOrDefault();
+            if (_directoryPath != null)
             {
-                var index = GetIndexFromDirectoryName(args, Path.GetFileName(directoryPath));
-                if (index >= MaxDirectoriesPerDateTime)
+                var _index = GetIndexFromDirectoryName(args, Path.GetFileName(_directoryPath));
+                if (_index >= MaxDirectoriesPerDateTime)
                 {
                     return;
                 }
 
-                var directoryIsEmpty = !Directory.EnumerateFileSystemEntries(directoryPath).Any();
-                if (!directoryIsEmpty)
+                var _directoryIsEmpty = !Directory.EnumerateFileSystemEntries(_directoryPath).Any();
+                if (!_directoryIsEmpty)
                 {
-                    index += 1;
-                    if (index >= MaxDirectoriesPerDateTime)
+                    _index += 1;
+                    if (_index >= MaxDirectoriesPerDateTime)
                     {
                         return;
                     }
 
-                    directoryPath = Path.Combine(rootDirectoryPath, GetDirectoryName(args, dateTime, index));
-                    if (Directory.Exists(directoryPath))
+                    _directoryPath = Path.Combine(rootDirectoryPath, GetDirectoryName(args, dateTime, _index));
+                    if (Directory.Exists(_directoryPath))
                     {
                         return;
                     }
@@ -78,10 +78,10 @@ namespace standbydir
             }
             else
             {
-                directoryPath = Path.Combine(rootDirectoryPath, GetDirectoryName(args, dateTime, 0));
+                _directoryPath = Path.Combine(rootDirectoryPath, GetDirectoryName(args, dateTime, 0));
             }
 
-            Directory.CreateDirectory(directoryPath);
+            Directory.CreateDirectory(_directoryPath);
         }
 
         protected virtual void DeleteObsoleteUnusedDirectories(
@@ -89,44 +89,44 @@ namespace standbydir
             string rootDirectoryPath,
             DateTimeOffset dateTime)
         {
-            var recentDates = GetPreviousDateTimes(args, dateTime);
+            var _recentDates = GetPreviousDateTimes(args, dateTime);
 
-            foreach (var directoryPath in recentDates
-                .SelectMany(recentDate => GetExistingDirectoryPathsForDateOrderedByIndex(args, rootDirectoryPath, recentDate))
-                .Where(directoryPath => !Directory.EnumerateFileSystemEntries(directoryPath).Any()))
+            foreach (var _directoryPath in _recentDates
+                .SelectMany(_recentDate => GetExistingDirectoryPathsForDateOrderedByIndex(args, rootDirectoryPath, _recentDate))
+                .Where(_directoryPath => !Directory.EnumerateFileSystemEntries(_directoryPath).Any()))
             {
-                Directory.Delete(directoryPath, false);
+                Directory.Delete(_directoryPath, false);
             }
         }
 
         protected virtual DateTimeOffset GetNow(IReadOnlyList<string> args) => DateTimeOffset.Now.Date;
         protected virtual IReadOnlyList<DateTimeOffset> GetPreviousDateTimes(IReadOnlyList<string> args, DateTimeOffset dateTime) =>
-            Enumerable.Range(1, 21).Select(n => dateTime.AddDays(n * -1)).ToList();
+            Enumerable.Range(1, 21).Select(_n => dateTime.AddDays(_n * -1)).ToList();
 
         protected virtual IReadOnlyList<string> GetRootDirectoryPaths(IReadOnlyList<string> args) =>
-            args.SkipWhile(arg => arg.StartsWith("-", StringComparison.Ordinal)).ToList();
+            args.SkipWhile(_arg => _arg.StartsWith("-", StringComparison.Ordinal)).ToList();
 
         protected virtual IReadOnlyList<string> GetExistingDirectoryPathsForDateOrderedByIndex(
             IReadOnlyList<string> args,
             string rootDirectoryPath,
             DateTimeOffset dateTime)
         {
-            var searchPattern = DirectoryNamePlaceholder
+            var _searchPattern = DirectoryNamePlaceholder
                 .Replace(DirectoryNameDatePlaceholder, dateTime.ToString(DirectoryNameDateFormat))
                 .Replace(DirectoryNameIndexPlaceholder, "??");
 
-            return Directory.GetDirectories(rootDirectoryPath, searchPattern)
-                .Where(directoryPath => Path.GetFileName(directoryPath)?.Length == DirectoryNamePlaceholder.Length)
-                .Where(directoryPath =>
+            return Directory.GetDirectories(rootDirectoryPath, _searchPattern)
+                .Where(_directoryPath => Path.GetFileName(_directoryPath)?.Length == DirectoryNamePlaceholder.Length)
+                .Where(_directoryPath =>
                 {
-                    int index;
+                    int _index;
                     return int.TryParse(
-                        Path.GetFileName(directoryPath)?
+                        Path.GetFileName(_directoryPath)?
                             .Substring(DirectoryNamePlaceholder.Length - DirectoryNameIndexPlaceholder.Length) ??
                         string.Empty,
-                        out index);
+                        out _index);
                 })
-                .OrderBy(directoryPath => directoryPath, StringComparer.Ordinal)
+                .OrderBy(_directoryPath => _directoryPath, StringComparer.Ordinal)
                 .ToList();
         }
 
