@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Nerven.Taskuler;
+using Nerven.Taskuler.Core;
 
 namespace standbydir
 {
@@ -36,11 +40,59 @@ namespace standbydir
         {
             var _rootDirectoryPaths = GetRootDirectoryPaths(args);
             var _dateTimeNow = GetNow(args);
-
-            foreach (var _rootDirectoryPath in _rootDirectoryPaths)
+            var _mode = GetOption(args, "--mode", "-m")?.Value ?? "once";
+            switch (_mode.ToLower(CultureInfo.InvariantCulture))
             {
-                EnsureEmptyDirectoryOnStandby(args, _rootDirectoryPath, _dateTimeNow);
-                DeleteObsoleteUnusedDirectories(args, _rootDirectoryPath, _dateTimeNow);
+                case "once":
+                case "o":
+                    foreach (var _rootDirectoryPath in _rootDirectoryPaths)
+                    {
+                        EnsureEmptyDirectoryOnStandby(args, _rootDirectoryPath, _dateTimeNow);
+                        DeleteObsoleteUnusedDirectories(args, _rootDirectoryPath, _dateTimeNow);
+                    }
+                    break;
+                case "continues":
+                case "c":
+                    ITaskulerWorker _worker;
+                    var _workerResolution = TaskulerWorker.DefaultResolution;
+                    using ((IDisposable)(_worker = TaskulerWorker.Create(_workerResolution)))
+                    {
+                        var _ensureEmptyDirectoryOnStandbyTask = _worker.AddIntervalSchedule(TimeSpan.FromMinutes(1))
+                            .AddTask(nameof(EnsureEmptyDirectoryOnStandby), () => Task.Run(() =>
+                                {
+                                    foreach (var _rootDirectoryPath in _rootDirectoryPaths)
+                                    {
+                                        EnsureEmptyDirectoryOnStandby(args, _rootDirectoryPath, _dateTimeNow);
+                                    }
+                                }));
+                        var _deleteObsoleteUnusedDirectoriesTask = _worker.AddIntervalSchedule(TimeSpan.FromHours(2))
+                            .AddTask(nameof(DeleteObsoleteUnusedDirectories), () => Task.Run(() =>
+                                {
+                                    foreach (var _rootDirectoryPath in _rootDirectoryPaths)
+                                    {
+                                        DeleteObsoleteUnusedDirectories(args, _rootDirectoryPath, _dateTimeNow);
+                                    }
+                                }));
+
+                        try
+                        {
+                            _worker.StartAsync().Wait();
+
+                            // Taskuler waits one resolution cycle before the first tick,
+                            // and RunManually() will throw if called before the first tick has occurred.
+                            Task.Delay(_workerResolution.Add(_workerResolution)).Wait();
+
+                            _ensureEmptyDirectoryOnStandbyTask.RunManually();
+                            _deleteObsoleteUnusedDirectoriesTask.RunManually();
+
+                            Console.ReadLine();
+                        }
+                        finally
+                        {
+                            _worker.StopAsync().Wait();
+                        }
+                    }
+                    break;
             }
         }
 
@@ -102,6 +154,23 @@ namespace standbydir
         protected virtual DateTimeOffset GetNow(IReadOnlyList<string> args) => DateTimeOffset.Now.Date;
         protected virtual IReadOnlyList<DateTimeOffset> GetPreviousDateTimes(IReadOnlyList<string> args, DateTimeOffset dateTime) =>
             Enumerable.Range(1, 21).Select(_n => dateTime.AddHours(-6).AddDays(_n * -1)).ToList();
+
+        protected virtual IReadOnlyList<KeyValuePair<string, string>> GetOptions(IReadOnlyList<string> args) =>
+            args
+                .TakeWhile(_arg => _arg.StartsWith("-", StringComparison.Ordinal))
+                .Select(_arg =>
+                    {
+                        var _separatorIndex = _arg.IndexOf('=');
+                        return _separatorIndex == -1
+                            ? new KeyValuePair<string, string>(_arg, null)
+                            : new KeyValuePair<string, string>(_arg.Substring(0, _separatorIndex), _arg.Substring(_separatorIndex + 1));
+                    })
+                .ToList();
+
+        protected virtual KeyValuePair<string, string>? GetOption(IReadOnlyList<string> args, params string[] optionNames) =>
+            GetOptions(args)
+                .Cast<KeyValuePair<string, string>?>()
+                .FirstOrDefault(_option => _option.HasValue && optionNames.Any(_optionName => string.Equals(_option.Value.Key, _optionName, StringComparison.OrdinalIgnoreCase)));
 
         protected virtual IReadOnlyList<string> GetRootDirectoryPaths(IReadOnlyList<string> args) =>
             args.SkipWhile(_arg => _arg.StartsWith("-", StringComparison.Ordinal)).ToList();
