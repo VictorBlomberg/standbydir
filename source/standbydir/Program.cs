@@ -101,7 +101,7 @@ namespace standbydir
 
         protected virtual DateTimeOffset GetNow(IReadOnlyList<string> args) => DateTimeOffset.Now.Date;
         protected virtual IReadOnlyList<DateTimeOffset> GetPreviousDateTimes(IReadOnlyList<string> args, DateTimeOffset dateTime) =>
-            Enumerable.Range(1, 21).Select(_n => dateTime.AddDays(_n * -1)).ToList();
+            Enumerable.Range(1, 21).Select(_n => dateTime.AddHours(-6).AddDays(_n * -1)).ToList();
 
         protected virtual IReadOnlyList<string> GetRootDirectoryPaths(IReadOnlyList<string> args) =>
             args.SkipWhile(_arg => _arg.StartsWith("-", StringComparison.Ordinal)).ToList();
